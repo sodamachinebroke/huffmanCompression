@@ -127,9 +127,7 @@ void writeHeader(std::ofstream &output, const std::vector<std::pair<std::string,
 
 std::vector<uint8_t> readCompressedFile(const std::string &filePath) {
     std::ifstream input(filePath, std::ios::binary | std::ios::ate);
-    if (!input.is_open()) {
-        throw std::runtime_error("Could not open file: " + filePath);
-    }
+    if (!input.is_open())throw std::runtime_error("Could not open file: " + filePath);
 
     std::streamsize fileSize = input.tellg();
     input.seekg(0, std::ios::beg);
@@ -139,10 +137,18 @@ std::vector<uint8_t> readCompressedFile(const std::string &filePath) {
     return compressedData;
 }
 
+std::string uint8_to_binary_string(const uint8_t value) {
+    std::string binary_string;
+    for (int i = 7; i >= 0; --i) {  // Iterate from the most significant bit to the least significant
+        binary_string += ((value >> i) & 1) ? '1' : '0';
+    }
+    return binary_string;
+}
+
 int main() {
     try {
-        std::string inputFileName = "../public/input.bin";
-        std::string outputFileName = "../public/output/input.bin.comp";
+        std::string inputFileName = "../public/input0.bin";
+        std::string outputFileName = "../public/output/input0.bin.comp";
 
         std::vector<uint8_t> data = readFromFile(inputFileName);
 
@@ -170,15 +176,29 @@ int main() {
 
         
         std::string encodedData = encode(data);
+        std::cout << "encodedData: " << encodedData << std::endl;
+
         writeBits(output, encodedData);
 
         output.close();
 
-        std::cout << "Compression complete.\n";
+        std::cout << "Compression complete.\n"<<std::endl;
 
-        // --- Decoding for verification ---
+        std::cout<<"Reading compressed: " <<std::endl;
         std::vector<uint8_t> compressed = readCompressedFile(outputFileName);
-        // ... (Decoding logic to be implemented based on the new header format) ...
+
+        for (uint8_t byte: compressed)
+        {
+            std::cout<< static_cast<int>(byte)<<" ";
+        }
+
+        std::cout<<std::endl;
+        for (int i=2; i<=static_cast<int>(compressed[0])*2; i+=2)
+        {
+            std::cout<<static_cast<int>(compressed[i])<<" : " <<static_cast<int>(compressed[i+1])<<std::endl;
+            std::cout<<uint8_to_binary_string(compressed[i+1]).substr(0,compressed[1])<<std::endl;
+        }
+
     } catch (const std::runtime_error &e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;

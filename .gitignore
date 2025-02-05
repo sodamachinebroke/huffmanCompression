@@ -1,0 +1,3 @@
+public/*.bin
+/cmake-build-debug/
+/public/output/

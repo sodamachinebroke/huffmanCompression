@@ -222,7 +222,7 @@ std::vector<std::pair<uint8_t, std::string>> decompressHeader(const std::vector<
       std::string symbolString = symbolBits.to_string();
       std::string symbol = symbolString.substr(0, codeLength);
 
-      decompCodes.emplace_back(codeLength, symbol);
+      decompCodes.emplace_back(code, symbol);
     }
 
     i += 2 + numCodes * 2;
@@ -275,62 +275,12 @@ int main() {
       std::cout << static_cast<int>(byte) << " ";
     std::cout << std::endl;
 
-    std::map<std::string, uint8_t> codeMap;
-    int mapLength = compressed[0];
-    int i = 1;
+    std::vector<std::pair<uint8_t, std::string>> decompressed = decompressHeader(compressed);
 
-    while (decompCodes.size() < mapLength) {
-      int numCodes = compressed[i];
-      int codeLength = compressed[i + 1];
-
-      for (int j = 0; j < numCodes; ++j) {
-        int codeIndex = i + 2 + j * 2;
-        int code = compressed[codeIndex];
-        uint8_t symbolByte = compressed[codeIndex + 1];
-
-        // Convert the symbol byte to a bit string
-        std::bitset<8> symbolBits(symbolByte);
-        std::string symbolString = symbolBits.to_string();
-
-        // Extract the required number of bits
-        std::string symbol = symbolString.substr(0, codeLength);
-
-        decompCodes.emplace_back(code, symbol);
-      }
-
-      i += 2 + numCodes * 2;
-    }
-
-    std::cout << "decompCodes" << std::endl;
-    for (const auto &[fst, snd]: decompCodes) {
+    std::cout << "decompressed" << std::endl;
+    for (const auto &[fst, snd]: decompressed) {
       std::cout << static_cast<int>(fst) << ":" << snd << std::endl;
     }
-    /*reconstructCodeMap(compressed, codeMap);
-
-    std::vector<uint8_t> decodedData = decompressData(compressed, codeMap);
-
-    std::cout << "Matched codes: " << std::endl;
-    for (uint8_t code: decodedData) {
-      std::cout << static_cast<int>(code) << std::endl;
-    }
-
-    std::ofstream outFile(decompressedFileName, std::ios::binary | std::ios::trunc);
-    if (outFile.is_open()) {
-      for (uint8_t byte: decodedData) {
-        outFile.write(reinterpret_cast<char *>(&byte), sizeof(uint8_t));
-      }
-      outFile.close();
-      std::cout << "Output file successfully saved." << std::endl;
-    } else {
-      throw std::runtime_error("Could not open output file.");
-    }
-
-    // Compare the original and decompressed files
-    if (compareFiles(inputFileName, decompressedFileName)) {
-      std::cout << "Success: The original and decompressed files match!" << std::endl;
-    } else {
-      std::cout << "Error: The original and decompressed files do not match!" << std::endl;
-    }*/
   } catch (const std::runtime_error &e) {
     std::cerr << "Error: " << e.what() << std::endl;
     return 1;

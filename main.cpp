@@ -126,13 +126,11 @@ std::vector<uint8_t> readCompressedFile(const std::string &filePath) {
   return compressedData;
 }
 
-std::string uint8_to_binary_string(const uint8_t value) {
-  std::string binary_string;
-  for (int i = 7; i >= 0; --i) {
-    // Iterate from the most significant bit to the least significant
-    binary_string += ((value >> i) & 1) ? '1' : '0';
-  }
-  return binary_string;
+auto b(uint8_t v) {
+  std::string s(8, '0');
+  for (int i = 0; i < 8; ++i)
+    s[7 - i] = (v >> i & 1) + '0';
+  return s;
 }
 
 void reconstructCodeMap(const std::vector<uint8_t> &compressedData, std::map<std::string, uint8_t> &codeMap) {
@@ -161,19 +159,31 @@ void reconstructCodeMap(const std::vector<uint8_t> &compressedData, std::map<std
 }
 
 std::vector<uint8_t> decompressData(const std::vector<uint8_t> &compressedData,
-                                    const std::map<std::string, uint8_t> &codeMap) {
+                                    const std::vector<std::pair<uint8_t, std::string>> &codePairs, size_t dataOffset,
+                                    int paddingBits) {
   std::string bitString;
-  for (uint8_t byte: compressedData) {
-    bitString += uint8_to_binary_string(byte);
+  // Start from dataOffset to skip the header
+  for (size_t i = dataOffset; i < compressedData.size(); ++i) {
+    uint8_t byte = compressedData[i];
+    bitString += b(byte);
+  }
+
+  // Remove padding bits if any
+  if (paddingBits > 0) {
+    bitString = bitString.substr(0, bitString.size() - paddingBits);
   }
 
   std::vector<uint8_t> decodedData;
   std::string currentCode;
   for (char bit: bitString) {
     currentCode += bit;
-    if (codeMap.find(currentCode) != codeMap.end()) {
-      decodedData.push_back(codeMap.at(currentCode));
-      currentCode.clear();
+    // Search through the code pairs for a matching code
+    for (const auto &pair: codePairs) {
+      if (pair.second == currentCode) {
+        decodedData.push_back(pair.first);
+        currentCode.clear();
+        break;
+      }
     }
   }
 
@@ -204,10 +214,17 @@ bool compareFiles(const std::string &file1, const std::string &file2) {
   return true;
 }
 
-std::vector<std::pair<uint8_t, std::string>> decompressHeader(const std::vector<unsigned char>& compressed) {
+struct DecompressionInfo {
+  std::vector<std::pair<uint8_t, std::string>> codePairs;
+  size_t dataOffset;
+  int paddingBits;
+};
+
+DecompressionInfo decompressHeader(const std::vector<unsigned char> &compressed) {
   std::vector<std::pair<uint8_t, std::string>> decompCodes;
-  int mapLength = compressed[0];
-  int i = 1;
+  int padding = compressed[0];
+  int mapLength = compressed[1];
+  int i = 2;
 
   while (decompCodes.size() < mapLength) {
     int numCodes = compressed[i];
@@ -228,7 +245,7 @@ std::vector<std::pair<uint8_t, std::string>> decompressHeader(const std::vector<
     i += 2 + numCodes * 2;
   }
 
-  return decompCodes;
+  return {decompCodes, static_cast<size_t>(i), padding};
 }
 
 int main() {
@@ -257,15 +274,16 @@ int main() {
       throw std::runtime_error("Could not open output file: " + outputFileName);
     }
 
-    writeHeader(output, invertedMap);
-
     std::string encodedData = encode(data);
     std::cout << "encodedData: " << encodedData << std::endl;
+    std::cout << "encodedData mod 8:" << encodedData.size() % 8 << std::endl;
 
+    output.put(encodedData.size() % 8);
+    writeHeader(output, invertedMap);
     writeBits(output, encodedData);
 
-    output.close();
 
+    output.close();
     std::cout << "Compression complete.\n" << std::endl;
 
 
@@ -275,12 +293,24 @@ int main() {
       std::cout << static_cast<int>(byte) << " ";
     std::cout << std::endl;
 
-    std::vector<std::pair<uint8_t, std::string>> decompressed = decompressHeader(compressed);
+    DecompressionInfo info = decompressHeader(compressed);
 
     std::cout << "decompressed" << std::endl;
-    for (const auto &[fst, snd]: decompressed) {
+    for (const auto &[fst, snd]: info.codePairs) {
       std::cout << static_cast<int>(fst) << ":" << snd << std::endl;
     }
+
+    std::vector<uint8_t> decompData = decompressData(compressed, info.codePairs, info.dataOffset, info.paddingBits);
+
+    for (const auto byte : decompData) {
+      std::cout<< static_cast<int>(byte) << " ";
+    }
+
+    // Write decompressed data to file
+    std::ofstream outFile(decompressedFileName, std::ios::binary);
+    outFile.write(reinterpret_cast<const char*>(decompData.data()), decompData.size());
+    outFile.close();
+
   } catch (const std::runtime_error &e) {
     std::cerr << "Error: " << e.what() << std::endl;
     return 1;
